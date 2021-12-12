@@ -14,6 +14,39 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
+struct page_refer_node{
+  struct spinlock lock;
+  int refer[(PHYSTOP-KERNBASE)/PGSIZE];
+};
+struct page_refer_node page_refer;
+
+
+void page_refer_add(uint64 pa){
+  acquire(&page_refer.lock);
+  pa = (pa-KERNBASE)/PGSIZE;
+  page_refer.refer[pa]+=1;
+  printf("add:%d\n",page_refer.refer[pa]);
+  release(&page_refer.lock);
+}
+
+void page_refer_minus(uint64 pa){
+  acquire(&page_refer.lock);
+  pa = (pa-KERNBASE)/PGSIZE;
+  page_refer.refer[pa]-=1;
+  printf("minus:%d\n",page_refer.refer[pa]);
+  release(&page_refer.lock);
+}
+
+int get_page_refer(uint64 pa){
+  int a;
+  acquire(&page_refer.lock);
+  pa = (pa-KERNBASE)/PGSIZE;
+  a = page_refer.refer[pa];
+  printf("get:%d\n",page_refer.refer[pa]);
+  release(&page_refer.lock);
+  return a;
+}
+
 struct run {
   struct run *next;
 };
@@ -26,6 +59,9 @@ struct {
 void
 kinit()
 {
+  for(int i=0;i<(PHYSTOP-KERNBASE)/PGSIZE;i++){
+    page_refer.refer[i] = 1;
+  }
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
@@ -47,7 +83,7 @@ void
 kfree(void *pa)
 {
   struct run *r;
-
+  
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
@@ -56,9 +92,17 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
+  acquire(&page_refer.lock);
+    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] -= 1;
+    if(page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] > 0){
+      release(&page_refer.lock);
+      return;
+    }
+  release(&page_refer.lock);
+
   acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+    r->next = kmem.freelist;
+    kmem.freelist = r;
   release(&kmem.lock);
 }
 
@@ -76,7 +120,14 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
+
+  acquire(&page_refer.lock);
+  if(r)
+    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 1;
+  release(&page_refer.lock);
+
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+

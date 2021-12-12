@@ -29,6 +29,37 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int copycow(uint64 va){
+  pte_t* pte;
+  uint flags;
+  uint64 pa;
+  if((pte = walk(myproc()->pagetable, va, 0)) == 0)
+    panic("uvmcopy: pte should exist");
+  if(*pte & PTE_RSW_8){
+    pa = (uint64)PTE2PA(*pte);
+    if(get_page_refer(pa) == 1){
+      *pte = *pte | PTE_W;
+      *pte = *pte & (~PTE_RSW_8);
+    }else{
+      //分配一个新页面
+      pa = (uint64)PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      flags = (flags | PTE_W) & (~PTE_RSW_8);
+      page_refer_minus(pa);
+      char* mem = kalloc();
+      if(mem == 0){
+        return -1;
+      }
+      memmove(mem,(char*)pa,PGSIZE);
+      if(mappages(myproc()->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
+        kfree(mem);
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -55,7 +86,6 @@ usertrap(void)
 
     if(p->killed)
       exit(-1);
-
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
     p->trapframe->epc += 4;
@@ -65,7 +95,13 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }
+  else if(r_scause() == 15){
+    if(copycow(r_stval()) == -1){
+      p->killed = 1;
+    }
+  }
+  else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
