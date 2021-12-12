@@ -71,8 +71,10 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+    //page_refer.refer[((uint64)p-KERNBASE)/PGSIZE] = 1;
     kfree(p);
+  }
 }
 
 // Free the page of physical memory pointed at by v,
@@ -94,10 +96,11 @@ kfree(void *pa)
 
   acquire(&page_refer.lock);
     page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] -= 1;
-    if(page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] > 0){
+    if(page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] < 0){
       release(&page_refer.lock);
       return;
     }
+    //page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 0;
   release(&page_refer.lock);
 
   acquire(&kmem.lock);
@@ -122,8 +125,10 @@ kalloc(void)
 
 
   acquire(&page_refer.lock);
-  if(r)
-    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 1;
+  if(r){
+    if((uint64)r > KERNBASE)
+      page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 1;
+  }
   release(&page_refer.lock);
 
   if(r)

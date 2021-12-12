@@ -42,19 +42,23 @@ int copycow(uint64 va){
       *pte = *pte & (~PTE_RSW_8);
     }else{
       //分配一个新页面
-      pa = (uint64)PTE2PA(*pte);
+      //pa = (uint64)PTE2PA(*pte);
       flags = PTE_FLAGS(*pte);
       flags = (flags | PTE_W) & (~PTE_RSW_8);
-      page_refer_minus(pa);
+      //page_refer_minus(pa);
       char* mem = kalloc();
       if(mem == 0){
         return -1;
       }
+      //*pte = PA2PTE((uint64)mem) | flags; 
       memmove(mem,(char*)pa,PGSIZE);
+      
       if(mappages(myproc()->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
         kfree(mem);
         return -1;
       }
+      
+      kfree((void*)pa);
     }
   }
   return 0;

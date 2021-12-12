@@ -150,14 +150,16 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
   uint64 a, last;
   pte_t *pte;
-
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
-      continue;
+    //if(*pte & PTE_V){
+    //  a += PGSIZE;
+    //  pa += PGSIZE;
+    //  continue;
+    //}
       //panic("remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
@@ -335,8 +337,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    *pte = (*pte & ~(PTE_W)) | PTE_RSW_8;
 
+    *pte = (*pte & ~(PTE_W)) | PTE_RSW_8;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
 
@@ -376,11 +378,13 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+    if(pa0 == 0){
       return -1;
+    }
     if(copycow(va0) == -1){
       return -1;
     }
+    pa0 = walkaddr(pagetable, va0);
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
