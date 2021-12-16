@@ -99,7 +99,7 @@ allocpid() {
 static struct proc*
 allocproc(void)
 {
-  struct proc *p;
+  struct proc *p = 0;
 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
@@ -133,6 +133,17 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  p->vma_start = TRAPFRAME  - PGSIZE ;
+  for(int i = 0;i<16;i++){
+    p->vma[i].addr = 0;
+    p->vma[i].file = 0;
+    p->vma[i].flags = 0;
+    p->vma[i].length = 0;
+    p->vma[i].offset = 0;
+    p->vma[i].prot = 0;
+    p->vma[i].valid = 0;
+  }
 
   return p;
 }

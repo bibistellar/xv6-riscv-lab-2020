@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+#include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,7 +71,62 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  else if(r_scause() == 13) {
+    int i = 0;
+    char* pa = 0 ;
+    struct inode * ip;
+    uint64 addr = r_stval();
+
+    for(i = 0;i<16;i++){
+      if(p->vma[i].valid == 1 && addr >= p->vma[i].addr && addr <= p->vma[i].addr + p->vma[i].length){
+        break;
+      }
+    }
+    if(i!=16){
+
+      ip = p->vma[i].file->ip;
+      //printf("ip:%p\n",ip);
+
+      //第一页
+      pa = kalloc();
+      memset(pa,0,PGSIZE);
+      int flags = 0;
+      if(p->vma[i].prot & PROT_READ){
+        flags = flags | PTE_R;
+      }
+      if(p->vma[i].prot & PROT_WRITE){
+        flags = flags | PTE_W;
+      }
+      if(mappages(p->pagetable, PGROUNDDOWN(p->vma[i].addr), PGSIZE, (uint64)pa, flags) != 0){
+        kfree(pa);
+        p->killed = 1;
+      }
+      //复制字节
+      ilock(ip);
+      readi(ip,1,p->vma[i].addr,0,PGSIZE);
+      printf("addr:%p\n",p->vma[i].addr);
+      printf("one complete\n");
+
+      //第二页
+      pa = kalloc();
+      memset(pa,0,PGSIZE);
+      if(mappages(p->pagetable, PGROUNDDOWN(p->vma[i].addr+PGSIZE), PGSIZE, (uint64)pa, flags) != 0){
+        kfree(pa);
+        p->killed = 1;
+      }
+      //复制字节
+      printf("addr:%p\n",p->vma[i].addr+PGSIZE);
+      printf("two complete\n");
+
+      readi(ip,1,p->vma[i].addr+PGSIZE,0,PGSIZE);
+      iunlockput(ip);
+    }
+    else{
+      p->killed = 1;
+    }
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;

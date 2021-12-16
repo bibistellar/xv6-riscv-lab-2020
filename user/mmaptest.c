@@ -114,8 +114,10 @@ mmap_test(void)
   if (p == MAP_FAILED)
     err("mmap (1)");
   _v1(p);
+  printf("munmap start\n");
   if (munmap(p, PGSIZE*2) == -1)
     err("munmap (1)");
+  printf("munmap end\n");
 
   printf("test mmap f: OK\n");
     

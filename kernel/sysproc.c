@@ -95,3 +95,42 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+void* sys_mmap(){
+  uint64 addr = 0;
+  int length = 0;
+  int prot = 0;
+  int flags = 0;
+  int fd = 0;
+  int offset = 0;
+  struct proc* p = 0;
+  int i = 0;
+
+  if(argaddr(0, &addr) < 0 || argint(1,&length) < 0 || argint(2,&prot) < 0 || argint(3,&flags) < 0 || argint(4,&fd) < 0 || argint(5,&offset) < 0){
+    return 0;
+  }
+  p = myproc();
+
+  for(i =0;i<16;i++){
+    if(p->vma[i].valid == 0){
+      p->vma[i].addr = p->vma_start-length;
+      p->vma_start -= length;
+      p->vma[i].file = p->ofile[fd];
+      p->vma[i].length = length;
+      p->vma[i].prot = prot;
+      p->vma[i].flags = flags;
+      p->vma[i].offset = offset;
+      p->vma[i].valid = 1;
+      break;
+    }
+  }
+  
+  filedup(p->vma[i].file);
+
+  //struct proc* p = myproc();
+  return (void*)p->vma[i].addr;
+}
+
+uint64 sys_munmap(){
+  return 0;
+}
