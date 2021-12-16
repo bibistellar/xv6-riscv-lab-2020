@@ -36,30 +36,33 @@ int copycow(uint64 va){
   if((pte = walk(myproc()->pagetable, va, 0)) == 0)
     panic("uvmcopy: pte should exist");
   if(*pte & PTE_RSW_8){
+    //分配一个新页面
     pa = (uint64)PTE2PA(*pte);
-    if(get_page_refer(pa) == 1){
-      *pte = *pte | PTE_W;
-      *pte = *pte & (~PTE_RSW_8);
-    }else{
-      //分配一个新页面
-      //pa = (uint64)PTE2PA(*pte);
-      flags = PTE_FLAGS(*pte);
-      flags = (flags | PTE_W) & (~PTE_RSW_8);
-      //page_refer_minus(pa);
-      char* mem = kalloc();
-      if(mem == 0){
-        return -1;
-      }
-      //*pte = PA2PTE((uint64)mem) | flags; 
-      memmove(mem,(char*)pa,PGSIZE);
-      
-      if(mappages(myproc()->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
-        kfree(mem);
-        return -1;
-      }
-      
-      kfree((void*)pa);
+    flags = PTE_FLAGS(*pte);
+    flags = (flags | PTE_W) & (~PTE_RSW_8);
+    page_refer_minus(pa);
+    char* mem = kalloc();
+    if(mem == 0){
+      return -1;
     }
+    //*pte = PA2PTE((uint64)mem) | flags; 
+    memmove(mem,(char*)pa,PGSIZE);
+    page_refer_minus(pa);
+
+    if(get_page_refer(pa) == 0){
+      uvmunmap(myproc()->pagetable, va, 1, 1);
+    }
+    else{
+      uvmunmap(myproc()->pagetable, va, 1, 0);
+    }
+
+    if(mappages(myproc()->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
+      kfree(mem);
+      return -1;
+    }
+  }
+  else{
+    return -1;
   }
   return 0;
 }

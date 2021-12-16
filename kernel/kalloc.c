@@ -25,7 +25,7 @@ void page_refer_add(uint64 pa){
   acquire(&page_refer.lock);
   pa = (pa-KERNBASE)/PGSIZE;
   page_refer.refer[pa]+=1;
-  printf("add:%d\n",page_refer.refer[pa]);
+  //printf("add:%d\n",page_refer.refer[pa]);
   release(&page_refer.lock);
 }
 
@@ -33,7 +33,7 @@ void page_refer_minus(uint64 pa){
   acquire(&page_refer.lock);
   pa = (pa-KERNBASE)/PGSIZE;
   page_refer.refer[pa]-=1;
-  printf("minus:%d\n",page_refer.refer[pa]);
+  //printf("minus:%d\n",page_refer.refer[pa]);
   release(&page_refer.lock);
 }
 
@@ -94,19 +94,12 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&page_refer.lock);
-    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] -= 1;
-    if(page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] < 0){
-      release(&page_refer.lock);
-      return;
-    }
-    //page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 0;
-  release(&page_refer.lock);
-
   acquire(&kmem.lock);
     r->next = kmem.freelist;
     kmem.freelist = r;
   release(&kmem.lock);
+
+  page_refer_minus((uint64)pa);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -133,6 +126,8 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  
+  page_refer_add((uint64)r);
   return (void*)r;
 }
 
