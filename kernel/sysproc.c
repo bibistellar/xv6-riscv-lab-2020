@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "fcntl.h"
 
 uint64
 sys_exit(void)
@@ -113,7 +114,7 @@ void* sys_mmap(){
 
   for(i =0;i<16;i++){
     if(p->vma[i].valid == 0){
-      p->vma[i].addr = p->vma_start-length;
+      p->vma[i].addr = p->vma_start-length+1;
       p->vma_start -= length;
       p->vma[i].file = p->ofile[fd];
       p->vma[i].length = length;
@@ -132,5 +133,29 @@ void* sys_mmap(){
 }
 
 uint64 sys_munmap(){
+  uint64 addr;
+  int length;
+  struct proc* p = 0;
+  int i  = 0;
+  if(argaddr(0,&addr) < 0 || argint(1,&length) < 0){
+    return -1;
+  }
+
+  p = myproc();
+
+  for(i = 0;i<16;i++){
+    if(p->vma[i].valid == 1 && addr >= p->vma[i].addr && addr <= p->vma[i].addr + p->vma[i].length + p->vma[i].addr -1){
+      break;
+    }
+  }
+  if(p->vma[i].flags == MAP_SHARED){
+    filewrite(p->vma[i].file,addr,length);
+  }
+  uvmunmap(p->pagetable,PGROUNDDOWN(addr),length/PGSIZE,1);
+  p->vma[i].length -= length;
+  if(p->vma[i].length == 0){
+    fileclose(p->vma[i].file);
+    p->vma[i].valid = 0;
+  }
   return 0;
 }

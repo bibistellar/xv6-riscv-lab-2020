@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -134,7 +135,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
-  p->vma_start = TRAPFRAME  - PGSIZE ;
+  p->vma_start = TRAPFRAME  - PGSIZE -1;
   for(int i = 0;i<16;i++){
     p->vma[i].addr = 0;
     p->vma[i].file = 0;
@@ -351,6 +352,17 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+
+  for(int i = 0;i<16;i++){
+    if(p->vma[i].valid == 1){
+      if(p->vma[i].flags == MAP_SHARED){
+        filewrite(p->vma[i].file,p->vma[i].addr,p->vma[i].length);
+      }
+      uvmunmap(p->pagetable,PGROUNDDOWN(p->vma[i].addr),p->vma[i].length/PGSIZE,1);
+      fileclose(p->vma[i].file);
+      p->vma[i].valid = 0;
+    }
+  }
 
   if(p == initproc)
     panic("init exiting");
