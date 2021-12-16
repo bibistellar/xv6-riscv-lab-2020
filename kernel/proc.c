@@ -155,6 +155,16 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  for(int i = 0;i<16;i++){
+    if(p->vma[i].valid == 1){
+      if(p->vma[i].flags == MAP_SHARED){
+        filewrite(p->vma[i].file,p->vma[i].addr,p->vma[i].length);
+      }
+      uvmunmap(p->pagetable,PGROUNDDOWN(p->vma[i].addr),p->vma[i].length/PGSIZE,1);
+      fileclose(p->vma[i].file);
+      p->vma[i].valid = 0;
+    }
+  }
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -292,6 +302,16 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
+  np->vma_start = p->vma_start;
+  for(int i = 0;i<16;i++){
+    np->vma[i] = p->vma[i];
+    if(np->vma[i].valid == 1){
+      printf("vma fork\n");
+      filedup(np->vma[i].file);
+    }
+  }
+
   np->sz = p->sz;
 
   np->parent = p;

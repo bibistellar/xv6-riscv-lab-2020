@@ -5,9 +5,11 @@
 #include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 #include "proc.h"
 #include "fcntl.h"
-
 uint64
 sys_exit(void)
 {
@@ -112,6 +114,11 @@ void* sys_mmap(){
   }
   p = myproc();
 
+  if(p->ofile[fd]->writable == 0 && p->ofile[fd]->readable == 1 && flags == MAP_SHARED  && (prot & PROT_WRITE)){
+    //printf("no\n");
+    return (void*)-1;
+  }
+
   for(i =0;i<16;i++){
     if(p->vma[i].valid == 0){
       p->vma[i].addr = p->vma_start-length+1;
@@ -153,6 +160,7 @@ uint64 sys_munmap(){
   }
   uvmunmap(p->pagetable,PGROUNDDOWN(addr),length/PGSIZE,1);
   p->vma[i].length -= length;
+  p->vma[i].addr += length;
   if(p->vma[i].length == 0){
     fileclose(p->vma[i].file);
     p->vma[i].valid = 0;
