@@ -316,8 +316,10 @@ ilock(struct inode *ip)
 void
 iunlock(struct inode *ip)
 {
-  if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
+  if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1){
+    printf("ip:%d\n",ip);
     panic("iunlock");
+  }
 
   releasesleep(&ip->lock);
 }
@@ -379,6 +381,7 @@ bmap(struct inode *ip, uint bn)
 {
   uint addr, *a;
   struct buf *bp;
+  struct buf *bp2;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0)
@@ -401,6 +404,35 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
 
+  bn -= NINDIRECT;
+  uint single = bn/NINDIRECT;
+  uint second = bn%NINDIRECT;
+
+  if(bn < double_NINDIRECT){
+    // Load indirect block, allocating if necessary.
+    if((addr = ip->addrs[12]) == 0){
+      ip->addrs[12] = addr = balloc(ip->dev);
+    }
+
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[single]) == 0){
+      a[single] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+
+    bp2 = bread(ip->dev, addr);
+    a = (uint*)bp2->data;
+    if((addr = a[second]) == 0){
+      a[second] = addr = balloc(ip->dev);
+      log_write(bp2);
+    }
+    brelse(bp);
+    brelse(bp2);
+    return addr;
+  }
+
+
   panic("bmap: out of range");
 }
 
@@ -411,7 +443,9 @@ itrunc(struct inode *ip)
 {
   int i, j;
   struct buf *bp;
+  struct buf *bp2;
   uint *a;
+  uint *b;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -430,6 +464,28 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if(ip->addrs[12]){
+    printf("delete\n");
+    bp = bread(ip->dev, ip->addrs[12]);
+    a = (uint*)bp->data;
+    printf("delete 1\n");
+    for(i = 0;i<NINDIRECT;i++){
+      if(a[i]){
+        bp2 = bread(ip->dev, a[i]);
+        b = (uint*)bp2->data;
+        for(j=0;j<NINDIRECT;j++){
+          if(b[j])
+            bfree(ip->dev, b[j]);
+        }
+        brelse(bp2);
+        bfree(ip->dev,a[i]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[12]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;

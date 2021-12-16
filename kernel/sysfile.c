@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "buf.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -303,7 +304,8 @@ sys_open(void)
       end_op();
       return -1;
     }
-  } else {
+  }
+  else {
     if((ip = namei(path)) == 0){
       end_op();
       return -1;
@@ -321,6 +323,30 @@ sys_open(void)
     end_op();
     return -1;
   }
+
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+    int cycle = 0;
+    char new[MAXPATH];
+    memset(new,0,sizeof(new));
+    memmove(new,path,MAXPATH);
+    iunlockput(ip);
+    while(ip->type==T_SYMLINK){
+      if(cycle == 10){
+        end_op();
+        return -1;
+      }
+      if((ip = namei(new)) == 0){
+        end_op();
+        return -1;
+      }
+      cycle++;
+      ilock(ip);
+      memset(new,0,sizeof(new));
+      readi(ip,0,(uint64)new,0,MAXPATH);
+      iunlockput(ip);
+    }
+    ilock(ip);
+  } 
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
@@ -482,5 +508,29 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+
+uint64 sys_symlink(void){
+  char new[MAXPATH], old[MAXPATH];
+  struct inode *ip;
+  if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  ip = create(new,T_SYMLINK,0,0);
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+
+  if(writei(ip, 0, (uint64)old, 0, MAXPATH) != MAXPATH){
+    // panic("symlink write failed");
+    return -1;
+  }
+
+  iunlockput(ip);
+  end_op();
   return 0;
 }

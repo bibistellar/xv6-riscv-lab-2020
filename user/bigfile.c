@@ -32,7 +32,6 @@ main()
     printf("bigfile: file is too small\n");
     exit(-1);
   }
-  
   close(fd);
   fd = open("big.file", O_RDONLY);
   if(fd < 0){
