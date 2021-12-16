@@ -18,7 +18,7 @@ struct context {
   uint64 s11;
 };
 
-// Per-CPU state.
+// Per-CPU state. 
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
   struct context context;     // swtch() here to enter scheduler().
