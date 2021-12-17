@@ -37,14 +37,12 @@ int copycow(uint64 va){
   uint flags = PTE_FLAGS(*pte);
 
   if(!(flags & PTE_RSW_8)){
-    printf("not cow\n");
-    return -2; // not cow page
+    return -2; 
   }
 
   acquire_ref();
   uint ref = get_page_refer(pa);
   if(ref > 1){
-    // ref > 1, alloc a new page
     char* mem = kalloc();
     if(mem == 0)
       goto bad;
@@ -62,6 +60,7 @@ int copycow(uint64 va){
   return 0;
 
   bad:
+  release_ref();
   return -1;
 }
 
