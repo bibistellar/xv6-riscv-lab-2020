@@ -136,7 +136,7 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   
   if(r)
-    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE]++;
+    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 1;
   return (void*)r;
 }
 
