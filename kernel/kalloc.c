@@ -21,29 +21,37 @@ struct page_refer_node{
 struct page_refer_node page_refer;
 
 
-void page_refer_add(uint64 pa){
+void acquire_ref(){
   acquire(&page_refer.lock);
-  pa = (pa-KERNBASE)/PGSIZE;
-  page_refer.refer[pa]+=1;
-  //printf("add:%d\n",page_refer.refer[pa]);
+}
+
+
+void release_ref(){
   release(&page_refer.lock);
 }
 
+
+void page_refer_add(uint64 pa){
+  //acquire(&page_refer.lock);
+  pa = (pa-KERNBASE)/PGSIZE;
+  page_refer.refer[pa]+=1;
+  //printf("add:%d\n",page_refer.refer[pa]);
+  //release(&page_refer.lock);
+}
+
 void page_refer_minus(uint64 pa){
-  acquire(&page_refer.lock);
+  //acquire(&page_refer.lock);
   pa = (pa-KERNBASE)/PGSIZE;
   page_refer.refer[pa]-=1;
   //printf("minus:%d\n",page_refer.refer[pa]);
-  release(&page_refer.lock);
+  //release(&page_refer.lock);
 }
 
 int get_page_refer(uint64 pa){
   int a;
-  acquire(&page_refer.lock);
   pa = (pa-KERNBASE)/PGSIZE;
   a = page_refer.refer[pa];
-  printf("get:%d\n",page_refer.refer[pa]);
-  release(&page_refer.lock);
+  //printf("get:%d\n",page_refer.refer[pa]);
   return a;
 }
 
@@ -85,12 +93,22 @@ void
 kfree(void *pa)
 {
   struct run *r;
+  acquire(&page_refer.lock);
+  if(get_page_refer((uint64)pa) > 1){
+    page_refer.refer[((uint64)pa-KERNBASE)/PGSIZE]-=1;
+    release(&page_refer.lock);
+    return;
+  }
+  
+
   
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
+  page_refer.refer[((uint64)pa-KERNBASE)/PGSIZE] = 0;
+  release(&page_refer.lock);
 
   r = (struct run*)pa;
 
@@ -98,8 +116,6 @@ kfree(void *pa)
     r->next = kmem.freelist;
     kmem.freelist = r;
   release(&kmem.lock);
-
-  page_refer_minus((uint64)pa);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -116,18 +132,11 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-
-  acquire(&page_refer.lock);
-  if(r){
-    if((uint64)r > KERNBASE)
-      page_refer.refer[((uint64)r-KERNBASE)/PGSIZE] = 1;
-  }
-  release(&page_refer.lock);
-
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   
-  page_refer_add((uint64)r);
+  if(r)
+    page_refer.refer[((uint64)r-KERNBASE)/PGSIZE]++;
   return (void*)r;
 }
 

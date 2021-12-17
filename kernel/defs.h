@@ -66,6 +66,8 @@ void            kinit(void);
 void            page_refer_add(uint64 pa);
 void            page_refer_minus(uint64 pa);
 int            get_page_refer(uint64 pa);
+void acquire_ref();
+void release_ref();
 
 // log.c
 void            initlog(int, struct superblock*);
