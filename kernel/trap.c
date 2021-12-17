@@ -250,7 +250,7 @@ int page_fault_handle(uint64 va){
   char *mem = 0;
   struct proc* p =myproc();
   uint64 sp_va = p->trapframe->sp;  
-  if(va>p->sz){
+  if(va>=p->sz){
     return -1;
   }
   else if(va < sp_va){
