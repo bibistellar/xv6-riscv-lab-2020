@@ -2690,7 +2690,7 @@ main(int argc, char *argv[])
     {copyout, "copyout"},
     {copyinstr1, "copyinstr1"},
     {copyinstr2, "copyinstr2"},
-    //{copyinstr3, "copyinstr3"},
+    {copyinstr3, "copyinstr3"},
     {rwsbrk, "rwsbrk" },
     {truncate1, "truncate1"},
     {truncate2, "truncate2"},
