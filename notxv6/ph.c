@@ -48,17 +48,13 @@ void put(int key, int value)
       break;
     }
   }
+  pthread_mutex_lock(&lock);
   if(e){
-    // update the existing key.
-    pthread_mutex_lock(&lock);
     e->value = value;
-    pthread_mutex_unlock(&lock);
   } else {
-    pthread_mutex_lock(&lock);
-    // the new is new.
     insert(key, value, &table[i], table[i]);
-    pthread_mutex_unlock(&lock);
   }
+  pthread_mutex_unlock(&lock);
 }
 
 static struct entry*
