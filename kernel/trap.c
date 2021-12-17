@@ -10,6 +10,7 @@ struct spinlock tickslock;
 uint ticks;
 
 extern char trampoline[], uservec[], userret[];
+extern char end[];
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
@@ -68,9 +69,36 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+    if(r_scause() == 13 || r_scause() == 15){
+      char *mem = 0;
+      uint64 va = r_stval();
+      uint64 sp_va = p->trapframe->sp;
+
+      if(va>p->sz){
+        p->killed = 1;
+      }
+      else if(va < sp_va){
+        p->killed = 1;
+      }
+      else{
+        mem = kalloc();
+        if(mem == 0){
+          p->killed = 1;
+        }
+        else{
+          memset(mem,0,PGSIZE);
+          if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+            kfree(mem);
+            p->killed = 1;
+          }
+        }
+      }
+    }
+    else{
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
   }
 
   if(p->killed)
@@ -216,5 +244,31 @@ devintr()
   } else {
     return 0;
   }
+}
+
+int page_fault_handle(uint64 va){
+  char *mem = 0;
+  struct proc* p =myproc();
+  uint64 sp_va = p->trapframe->sp;  
+  if(va>p->sz){
+    return -1;
+  }
+  else if(va < sp_va){
+    return -1;
+  }
+  else{
+    mem = kalloc();
+    if(mem == 0){
+      return -1;
+    }
+    else{
+      memset(mem,0,PGSIZE);
+      if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+        kfree(mem);
+        return -1;
+      }
+    }
+  }
+  return 1;
 }
 

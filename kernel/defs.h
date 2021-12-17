@@ -152,6 +152,7 @@ void            uartintr(void);
 void            uartputc(int);
 void            uartputc_sync(int);
 int             uartgetc(void);
+int             page_fault_handle(uint64 va);
 
 // vm.c
 void            kvminit(void);
